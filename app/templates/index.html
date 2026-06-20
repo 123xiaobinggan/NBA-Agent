@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NBA Data Agent</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sessions">
+        <div class="brand">
+          <div>
+            <h1>NBA Agent</h1>
+            <p>本地数据分析</p>
+          </div>
+          <button id="newSessionBtn" class="icon-btn" title="新建会话">+</button>
+        </div>
+        <div id="sessionList" class="session-list"></div>
+      </aside>
+
+      <section class="chat">
+        <header class="chat-header">
+          <div>
+            <h2 id="sessionTitle">新会话</h2>
+            <span id="sessionMeta">准备就绪</span>
+          </div>
+        </header>
+
+        <div id="messageList" class="messages"></div>
+
+        <form id="messageForm" class="composer">
+          <textarea id="messageInput" rows="2" placeholder="请输入 NBA 数据问题"></textarea>
+          <button id="sendBtn" type="submit">发送</button>
+        </form>
+      </section>
+
+      <aside class="inspector">
+        <header>
+          <h2>图表</h2>
+          <p id="chartMeta">当前会话生成的图表会显示在这里</p>
+        </header>
+        <div id="chartList" class="chart-list"></div>
+      </aside>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
