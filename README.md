@@ -153,6 +153,71 @@ Web 端能力：
 
 普通统计/排名/分析问题不会自动生成图表。
 
+## Docker 运行
+
+项目提供单容器运行方式：容器内启动 MariaDB，首次启动时创建 NBA 数据库、导入 `data/` 下的 CSV 数据，然后启动 Flask Web 服务。
+
+构建镜像：
+
+```powershell
+docker build -f DockerFIle -t nba-data-agent .
+```
+
+启动容器：
+
+```powershell
+docker run --name nba-data-agent `
+  -e API_KEY=你的DeepSeek_API_Key `
+  -p 5000:5000 `
+  nba-data-agent
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:5000/
+```
+
+指定本机端口，例如映射到 `8080`：
+
+```powershell
+docker run --name nba-data-agent `
+  -e API_KEY=你的DeepSeek_API_Key `
+  -p 8080:5000 `
+  nba-data-agent
+```
+
+然后访问：
+
+```text
+http://127.0.0.1:8080/
+```
+
+为了保留容器内 MySQL 数据，建议挂载 volume：
+
+```powershell
+docker volume create nba_mysql_data
+
+docker run --name nba-data-agent `
+  -e API_KEY=你的DeepSeek_API_Key `
+  -p 5000:5000 `
+  -v nba_mysql_data:/var/lib/mysql `
+  nba-data-agent
+```
+
+可选环境变量：
+
+```text
+API_KEY                  DeepSeek API Key，等价于 DEEPSEEK_API_KEY
+DEEPSEEK_BASE_URL         DeepSeek 兼容接口地址，可留空
+NBA_AGENT_MODEL           默认 deepseek-chat
+NBA_DB_NAME               默认 nba
+NBA_DB_USER               默认 nba_agent
+NBA_DB_PASSWORD           默认 nba_agent
+```
+
+注意：首次启动需要初始化 MySQL 并导入 CSV，耗时会比普通启动长。导入完成后会在 MySQL 数据目录写入标记文件，后续启动会跳过导入。
+
 ## Agent 查询安全
 
 Agent 工具链包含：

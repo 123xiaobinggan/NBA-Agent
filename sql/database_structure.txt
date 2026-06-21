@@ -1,0 +1,533 @@
+database: nba
+
+tables:
+CREATE TABLE `seasons` (
+    `season_id` smallint unsigned NOT NULL,
+    `season_label` varchar(9) NOT NULL,
+    `start_year` smallint unsigned NOT NULL,
+    `end_year` smallint unsigned NOT NULL,
+    `start_date` date DEFAULT NULL,
+    `end_date` date DEFAULT NULL,
+    PRIMARY KEY (`season_id`),
+    UNIQUE KEY `uk_seasons_label` (`season_label`),
+    CONSTRAINT `chk_seasons_year` CHECK (
+        (
+            `end_year` = (`start_year` + 1)
+        )
+    )
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'NBA赛季维度表'
+
+CREATE TABLE `teams` (
+    `team_id` bigint unsigned NOT NULL,
+    `full_name` varchar(100) NOT NULL,
+    `abbreviation` varchar(10) NOT NULL,
+    `nickname` varchar(60) DEFAULT NULL,
+    `city` varchar(60) DEFAULT NULL,
+    `state` varchar(60) DEFAULT NULL,
+    `year_founded` smallint unsigned DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`team_id`),
+    UNIQUE KEY `uk_teams_abbreviation` (`abbreviation`),
+    KEY `idx_teams_full_name` (`full_name`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '球队基础信息表'
+
+CREATE TABLE `team_aliases` (
+    `alias_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `team_id` bigint unsigned NOT NULL,
+    `alias_code` varchar(10) NOT NULL,
+    `alias_name` varchar(100) DEFAULT NULL,
+    `source_name` varchar(50) NOT NULL,
+    `valid_from_season` smallint unsigned DEFAULT NULL,
+    `valid_to_season` smallint unsigned DEFAULT NULL,
+    PRIMARY KEY (`alias_id`),
+    KEY `idx_team_alias_code` (`alias_code`),
+    KEY `idx_team_alias_team` (`team_id`),
+    CONSTRAINT `fk_team_alias_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `chk_team_alias_seasons` CHECK (
+        (
+            (`valid_to_season` is null)
+            or (`valid_from_season` is null)
+            or (
+                `valid_to_season` >= `valid_from_season`
+            )
+        )
+    )
+) ENGINE = InnoDB AUTO_INCREMENT = 156 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '不同数据源及历史时期的球队代码映射'
+
+CREATE TABLE `players` (
+    `player_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `nba_person_id` bigint unsigned DEFAULT NULL,
+    `full_name` varchar(150) NOT NULL,
+    `first_name` varchar(80) DEFAULT NULL,
+    `last_name` varchar(80) DEFAULT NULL,
+    `player_slug` varchar(180) DEFAULT NULL,
+    `birthdate` date DEFAULT NULL,
+    `school` varchar(150) DEFAULT NULL,
+    `country` varchar(80) DEFAULT NULL,
+    `last_affiliation` varchar(180) DEFAULT NULL,
+    `height_text` varchar(15) DEFAULT NULL,
+    `height_cm` decimal(5, 2) DEFAULT NULL,
+    `weight_lb` decimal(6, 2) DEFAULT NULL,
+    `weight_kg` decimal(6, 2) DEFAULT NULL,
+    `primary_position` varchar(30) DEFAULT NULL,
+    `from_year` smallint unsigned DEFAULT NULL,
+    `to_year` smallint unsigned DEFAULT NULL,
+    `season_experience` smallint unsigned DEFAULT NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT '0',
+    `greatest_75_flag` tinyint(1) NOT NULL DEFAULT '0',
+    `draft_status` enum(
+        'DRAFTED',
+        'UNDRAFTED',
+        'UNKNOWN'
+    ) NOT NULL DEFAULT 'UNKNOWN',
+    `draft_year` smallint unsigned DEFAULT NULL,
+    `draft_round` smallint unsigned DEFAULT NULL,
+    `draft_number` smallint unsigned DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`),
+    UNIQUE KEY `uk_players_nba_person_id` (`nba_person_id`),
+    KEY `idx_players_full_name` (`full_name`),
+    KEY `idx_players_country` (`country`),
+    KEY `idx_players_position` (`primary_position`)
+) ENGINE = InnoDB AUTO_INCREMENT = 18111 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '球员基础档案表'
+
+
+CREATE TABLE `player_name_aliases` (
+    `alias_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `player_id` bigint unsigned NOT NULL,
+    `source_name` varchar(160) NOT NULL,
+    `normalized_name` varchar(160) NOT NULL,
+    `source_dataset` varchar(100) NOT NULL,
+    `is_manual_fix` tinyint(1) NOT NULL DEFAULT '0',
+    PRIMARY KEY (`alias_id`),
+    UNIQUE KEY `uk_player_alias` (
+        `player_id`,
+        `source_name`,
+        `source_dataset`
+    ),
+    KEY `idx_player_alias_normalized` (`normalized_name`),
+    CONSTRAINT `fk_player_alias_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`player_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 57444 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '不同数据源中的球员姓名映射'
+
+
+CREATE TABLE `games` (
+    `game_id` bigint unsigned NOT NULL,
+    `season_id` smallint unsigned NOT NULL,
+    `game_date` date NOT NULL,
+    `season_type` enum('REGULAR', 'PLAYOFFS') NOT NULL,
+    `home_team_id` bigint unsigned NOT NULL,
+    `away_team_id` bigint unsigned NOT NULL,
+    `home_points` smallint unsigned NOT NULL,
+    `away_points` smallint unsigned NOT NULL,
+    `winner_team_id` bigint unsigned DEFAULT NULL,
+    `duration_minutes` smallint unsigned DEFAULT NULL,
+    `overtime_count` tinyint unsigned NOT NULL DEFAULT '0',
+    `lead_changes` smallint unsigned DEFAULT NULL,
+    `times_tied` smallint unsigned DEFAULT NULL,
+    `source_file` varchar(255) DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`game_id`),
+    KEY `idx_games_season_type` (`season_id`, `season_type`),
+    KEY `idx_games_date` (`game_date`),
+    KEY `idx_games_home_team` (`home_team_id`, `game_date`),
+    KEY `idx_games_away_team` (`away_team_id`, `game_date`),
+    KEY `idx_games_winner` (`winner_team_id`),
+    CONSTRAINT `fk_games_away_team` FOREIGN KEY (`away_team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `fk_games_home_team` FOREIGN KEY (`home_team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `fk_games_season` FOREIGN KEY (`season_id`) REFERENCES `seasons` (`season_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `fk_games_winner_team` FOREIGN KEY (`winner_team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'NBA比赛主表'
+
+
+CREATE TABLE `team_game_stats` (
+    `game_id` bigint unsigned NOT NULL,
+    `team_id` bigint unsigned NOT NULL,
+    `opponent_team_id` bigint unsigned NOT NULL,
+    `is_home` tinyint(1) NOT NULL,
+    `is_win` tinyint(1) NOT NULL,
+    `points` smallint unsigned NOT NULL,
+    `field_goals_made` smallint unsigned DEFAULT NULL,
+    `field_goals_attempted` smallint unsigned DEFAULT NULL,
+    `field_goal_pct` decimal(5, 4) DEFAULT NULL,
+    `three_points_made` smallint unsigned DEFAULT NULL,
+    `three_points_attempted` smallint unsigned DEFAULT NULL,
+    `three_point_pct` decimal(5, 4) DEFAULT NULL,
+    `free_throws_made` smallint unsigned DEFAULT NULL,
+    `free_throws_attempted` smallint unsigned DEFAULT NULL,
+    `free_throw_pct` decimal(5, 4) DEFAULT NULL,
+    `offensive_rebounds` smallint unsigned DEFAULT NULL,
+    `defensive_rebounds` smallint unsigned DEFAULT NULL,
+    `rebounds` smallint unsigned DEFAULT NULL,
+    `assists` smallint unsigned DEFAULT NULL,
+    `steals` smallint unsigned DEFAULT NULL,
+    `blocks` smallint unsigned DEFAULT NULL,
+    `turnovers` smallint unsigned DEFAULT NULL,
+    `personal_fouls` smallint unsigned DEFAULT NULL,
+    `plus_minus` smallint DEFAULT NULL,
+    `points_in_paint` smallint unsigned DEFAULT NULL,
+    `second_chance_points` smallint unsigned DEFAULT NULL,
+    `fast_break_points` smallint unsigned DEFAULT NULL,
+    `largest_lead` smallint unsigned DEFAULT NULL,
+    `team_turnovers` smallint unsigned DEFAULT NULL,
+    `total_turnovers` smallint unsigned DEFAULT NULL,
+    `team_rebounds` smallint unsigned DEFAULT NULL,
+    `points_off_turnovers` smallint unsigned DEFAULT NULL,
+    PRIMARY KEY (`game_id`, `team_id`),
+    KEY `idx_team_game_team` (`team_id`, `game_id`),
+    KEY `idx_team_game_opponent` (`opponent_team_id`),
+    KEY `idx_team_game_result` (`team_id`, `is_win`),
+    KEY `idx_team_game_home` (`team_id`, `is_home`),
+    CONSTRAINT `fk_team_game_game` FOREIGN KEY (`game_id`) REFERENCES `games` (`game_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_team_game_opponent` FOREIGN KEY (`opponent_team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `fk_team_game_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '球队单场技术统计事实表'
+
+
+
+CREATE TABLE `period_scores` (
+    `game_id` bigint unsigned NOT NULL,
+    `team_id` bigint unsigned NOT NULL,
+    `period_number` tinyint unsigned NOT NULL,
+    `period_type` enum('QUARTER', 'OVERTIME') NOT NULL,
+    `points` smallint unsigned NOT NULL,
+    PRIMARY KEY (
+        `game_id`,
+        `team_id`,
+        `period_number`
+    ),
+    KEY `idx_period_team_type` (`team_id`, `period_type`),
+    KEY `idx_period_number` (`period_number`),
+    CONSTRAINT `fk_period_game` FOREIGN KEY (`game_id`) REFERENCES `games` (`game_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_period_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `chk_period_number` CHECK (
+        (
+            `period_number` between 1 and 14
+        )
+    )
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '比赛各节及加时得分表'
+
+
+
+CREATE TABLE `player_season_stats` (
+    `stat_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `season_id` smallint unsigned NOT NULL,
+    `season_type` enum('REGULAR', 'PLAYOFFS') NOT NULL,
+    `player_id` bigint unsigned NOT NULL,
+    `team_id` bigint unsigned DEFAULT NULL,
+    `source_team_code` varchar(10) NOT NULL,
+    `is_total` tinyint(1) NOT NULL DEFAULT '0',
+    `position` varchar(20) DEFAULT NULL,
+    `age` tinyint unsigned DEFAULT NULL,
+    `games_played` smallint unsigned NOT NULL,
+    `games_started` smallint unsigned DEFAULT NULL,
+    `minutes_per_game` decimal(6, 3) DEFAULT NULL,
+    `field_goals_per_game` decimal(6, 3) DEFAULT NULL,
+    `field_goal_attempts_pg` decimal(6, 3) DEFAULT NULL,
+    `field_goal_pct` decimal(5, 4) DEFAULT NULL,
+    `three_points_per_game` decimal(6, 3) DEFAULT NULL,
+    `three_point_attempts_pg` decimal(6, 3) DEFAULT NULL,
+    `three_point_pct` decimal(5, 4) DEFAULT NULL,
+    `two_points_per_game` decimal(6, 3) DEFAULT NULL,
+    `two_point_attempts_pg` decimal(6, 3) DEFAULT NULL,
+    `two_point_pct` decimal(5, 4) DEFAULT NULL,
+    `effective_fg_pct` decimal(5, 4) DEFAULT NULL,
+    `free_throws_per_game` decimal(6, 3) DEFAULT NULL,
+    `free_throw_attempts_pg` decimal(6, 3) DEFAULT NULL,
+    `free_throw_pct` decimal(5, 4) DEFAULT NULL,
+    `offensive_rebounds_pg` decimal(6, 3) DEFAULT NULL,
+    `defensive_rebounds_pg` decimal(6, 3) DEFAULT NULL,
+    `rebounds_per_game` decimal(6, 3) DEFAULT NULL,
+    `assists_per_game` decimal(6, 3) DEFAULT NULL,
+    `steals_per_game` decimal(6, 3) DEFAULT NULL,
+    `blocks_per_game` decimal(6, 3) DEFAULT NULL,
+    `turnovers_per_game` decimal(6, 3) DEFAULT NULL,
+    `personal_fouls_pg` decimal(6, 3) DEFAULT NULL,
+    `points_per_game` decimal(6, 3) DEFAULT NULL,
+    `source_rank` smallint unsigned DEFAULT NULL,
+    `source_file` varchar(255) DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`stat_id`),
+    UNIQUE KEY `uk_player_season_team` (
+        `season_id`,
+        `season_type`,
+        `player_id`,
+        `source_team_code`
+    ),
+    KEY `idx_player_stats_season` (`season_id`, `season_type`),
+    KEY `idx_player_stats_player` (`player_id`, `season_id`),
+    KEY `idx_player_stats_team` (`team_id`, `season_id`),
+    KEY `idx_player_stats_points` (
+        `season_id`,
+        `season_type`,
+        `points_per_game`
+    ),
+    KEY `idx_player_stats_rebounds` (
+        `season_id`,
+        `season_type`,
+        `rebounds_per_game`
+    ),
+    KEY `idx_player_stats_assists` (
+        `season_id`,
+        `season_type`,
+        `assists_per_game`
+    ),
+    CONSTRAINT `fk_player_stats_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`player_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `fk_player_stats_season` FOREIGN KEY (`season_id`) REFERENCES `seasons` (`season_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `fk_player_stats_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 29939 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '球员赛季场均技术统计表'
+
+
+CREATE TABLE `draft_records` (
+    `draft_record_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `source_person_id` bigint unsigned DEFAULT NULL,
+    `player_id` bigint unsigned DEFAULT NULL,
+    `player_name` varchar(160) NOT NULL,
+    `draft_year` smallint unsigned NOT NULL,
+    `round_number` smallint unsigned DEFAULT NULL,
+    `round_pick` smallint unsigned DEFAULT NULL,
+    `overall_pick` smallint unsigned DEFAULT NULL,
+    `draft_type` varchar(30) DEFAULT NULL,
+    `draft_team_id` bigint unsigned DEFAULT NULL,
+    `team_city` varchar(80) DEFAULT NULL,
+    `team_name` varchar(100) DEFAULT NULL,
+    `team_abbreviation` varchar(10) DEFAULT NULL,
+    `organization` varchar(180) DEFAULT NULL,
+    `organization_type` varchar(80) DEFAULT NULL,
+    `source_file` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`draft_record_id`),
+    UNIQUE KEY `uk_draft_person_year` (
+        `source_person_id`,
+        `draft_year`
+    ),
+    KEY `idx_draft_year_pick` (`draft_year`, `overall_pick`),
+    KEY `idx_draft_player` (`player_id`),
+    CONSTRAINT `fk_draft_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`player_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 13900 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'NBA历年选秀记录'
+
+CREATE TABLE `draft_combine_measurements` (
+    `combine_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `draft_year` smallint unsigned NOT NULL,
+    `source_player_id` bigint unsigned DEFAULT NULL,
+    `player_id` bigint unsigned DEFAULT NULL,
+    `player_name` varchar(160) NOT NULL,
+    `position` varchar(20) DEFAULT NULL,
+    `height_without_shoes_in` decimal(5, 2) DEFAULT NULL,
+    `height_with_shoes_in` decimal(5, 2) DEFAULT NULL,
+    `weight_lb` decimal(6, 2) DEFAULT NULL,
+    `wingspan_in` decimal(5, 2) DEFAULT NULL,
+    `standing_reach_in` decimal(5, 2) DEFAULT NULL,
+    `body_fat_pct` decimal(5, 2) DEFAULT NULL,
+    `hand_length_in` decimal(5, 2) DEFAULT NULL,
+    `hand_width_in` decimal(5, 2) DEFAULT NULL,
+    `standing_vertical_leap_in` decimal(5, 2) DEFAULT NULL,
+    `max_vertical_leap_in` decimal(5, 2) DEFAULT NULL,
+    `lane_agility_time_sec` decimal(5, 2) DEFAULT NULL,
+    `modified_lane_agility_sec` decimal(5, 2) DEFAULT NULL,
+    `three_quarter_sprint_sec` decimal(5, 2) DEFAULT NULL,
+    `bench_press_reps` smallint unsigned DEFAULT NULL,
+    `source_file` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`combine_id`),
+    UNIQUE KEY `uk_combine_source_player_year` (
+        `source_player_id`,
+        `draft_year`
+    ),
+    KEY `idx_combine_player` (`player_id`),
+    KEY `idx_combine_year_position` (`draft_year`, `position`),
+    CONSTRAINT `fk_combine_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`player_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1237 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'NBA选秀联合试训身体和运动测量数据'
+
+CREATE TABLE `season_awards` (
+    `award_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+    `season_id` smallint unsigned NOT NULL,
+    `award_type` varchar(60) NOT NULL,
+    `player_id` bigint unsigned DEFAULT NULL,
+    `source_player_name` varchar(160) NOT NULL,
+    `source_file` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`award_id`),
+    UNIQUE KEY `uk_season_award` (`season_id`, `award_type`),
+    KEY `idx_award_player` (`player_id`),
+    CONSTRAINT `fk_award_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`player_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT `fk_award_season` FOREIGN KEY (`season_id`) REFERENCES `seasons` (`season_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 777 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'MVP等赛季奖项表'
+
+CREATE ALGORITHM = UNDEFINED DEFINER = `root` @`localhost` SQL SECURITY DEFINER VIEW `v_player_season_overall` AS
+select
+    `pss`.`stat_id` AS `stat_id`,
+    `pss`.`season_id` AS `season_id`,
+    `s`.`season_label` AS `season_label`,
+    `pss`.`season_type` AS `season_type`,
+    `pss`.`player_id` AS `player_id`,
+    `p`.`full_name` AS `player_name`,
+    `pss`.`position` AS `position`,
+    `pss`.`age` AS `age`,
+    `pss`.`games_played` AS `games_played`,
+    `pss`.`games_started` AS `games_started`,
+    `pss`.`minutes_per_game` AS `minutes_per_game`,
+    `pss`.`field_goal_pct` AS `field_goal_pct`,
+    `pss`.`three_point_pct` AS `three_point_pct`,
+    `pss`.`free_throw_pct` AS `free_throw_pct`,
+    `pss`.`rebounds_per_game` AS `rebounds_per_game`,
+    `pss`.`assists_per_game` AS `assists_per_game`,
+    `pss`.`steals_per_game` AS `steals_per_game`,
+    `pss`.`blocks_per_game` AS `blocks_per_game`,
+    `pss`.`turnovers_per_game` AS `turnovers_per_game`,
+    `pss`.`points_per_game` AS `points_per_game`
+from (
+        (
+            `player_season_stats` `pss`
+            join `players` `p` on (
+                (
+                    `p`.`player_id` = `pss`.`player_id`
+                )
+            )
+        )
+        join `seasons` `s` on (
+            (
+                `s`.`season_id` = `pss`.`season_id`
+            )
+        )
+    )
+where (
+        (`pss`.`is_total` = true)
+        or (
+            (`pss`.`is_total` = false)
+            and (
+                (
+                    select count(0)
+                    from `player_season_stats` `x`
+                    where (
+                            (
+                                `x`.`season_id` = `pss`.`season_id`
+                            )
+                            and (
+                                `x`.`season_type` = `pss`.`season_type`
+                            )
+                            and (
+                                `x`.`player_id` = `pss`.`player_id`
+                            )
+                        )
+                ) = 1
+            )
+        )
+    )
+
+
+CREATE ALGORITHM = UNDEFINED DEFINER = `root` @`localhost` SQL SECURITY DEFINER VIEW `v_player_team_season_stats` AS
+select
+    `pss`.`stat_id` AS `stat_id`,
+    `pss`.`season_id` AS `season_id`,
+    `s`.`season_label` AS `season_label`,
+    `pss`.`season_type` AS `season_type`,
+    `pss`.`player_id` AS `player_id`,
+    `p`.`full_name` AS `player_name`,
+    `pss`.`team_id` AS `team_id`,
+    `t`.`full_name` AS `team_name`,
+    `pss`.`source_team_code` AS `source_team_code`,
+    `pss`.`position` AS `position`,
+    `pss`.`age` AS `age`,
+    `pss`.`games_played` AS `games_played`,
+    `pss`.`games_started` AS `games_started`,
+    `pss`.`minutes_per_game` AS `minutes_per_game`,
+    `pss`.`field_goal_pct` AS `field_goal_pct`,
+    `pss`.`three_point_pct` AS `three_point_pct`,
+    `pss`.`free_throw_pct` AS `free_throw_pct`,
+    `pss`.`rebounds_per_game` AS `rebounds_per_game`,
+    `pss`.`assists_per_game` AS `assists_per_game`,
+    `pss`.`steals_per_game` AS `steals_per_game`,
+    `pss`.`blocks_per_game` AS `blocks_per_game`,
+    `pss`.`turnovers_per_game` AS `turnovers_per_game`,
+    `pss`.`points_per_game` AS `points_per_game`
+from (
+        (
+            (
+                `player_season_stats` `pss`
+                join `players` `p` on (
+                    (
+                        `p`.`player_id` = `pss`.`player_id`
+                    )
+                )
+            )
+            join `seasons` `s` on (
+                (
+                    `s`.`season_id` = `pss`.`season_id`
+                )
+            )
+        )
+        left join `teams` `t` on (
+            (
+                `t`.`team_id` = `pss`.`team_id`
+            )
+        )
+    )
+where (`pss`.`is_total` = false)
+
+
+
+CREATE ALGORITHM = UNDEFINED DEFINER = `root` @`localhost` SQL SECURITY DEFINER VIEW `v_team_game_analysis` AS
+select
+    `g`.`game_id` AS `game_id`,
+    `g`.`season_id` AS `season_id`,
+    `s`.`season_label` AS `season_label`,
+    `g`.`game_date` AS `game_date`,
+    `g`.`season_type` AS `season_type`,
+    `tgs`.`team_id` AS `team_id`,
+    `t`.`full_name` AS `team_name`,
+    `t`.`abbreviation` AS `team_abbreviation`,
+    `tgs`.`opponent_team_id` AS `opponent_team_id`,
+    `ot`.`full_name` AS `opponent_name`,
+    `ot`.`abbreviation` AS `opponent_abbreviation`,
+    `tgs`.`is_home` AS `is_home`,
+    `tgs`.`is_win` AS `is_win`,
+    `tgs`.`points` AS `points`,
+    (
+        case
+            when (`tgs`.`is_home` = true) then `g`.`away_points`
+            else `g`.`home_points`
+        end
+    ) AS `opponent_points`,
+    `tgs`.`field_goal_pct` AS `field_goal_pct`,
+    `tgs`.`three_point_pct` AS `three_point_pct`,
+    `tgs`.`free_throw_pct` AS `free_throw_pct`,
+    `tgs`.`rebounds` AS `rebounds`,
+    `tgs`.`assists` AS `assists`,
+    `tgs`.`steals` AS `steals`,
+    `tgs`.`blocks` AS `blocks`,
+    `tgs`.`turnovers` AS `turnovers`,
+    `tgs`.`personal_fouls` AS `personal_fouls`,
+    `tgs`.`plus_minus` AS `plus_minus`,
+    `tgs`.`points_in_paint` AS `points_in_paint`,
+    `tgs`.`second_chance_points` AS `second_chance_points`,
+    `tgs`.`fast_break_points` AS `fast_break_points`,
+    `tgs`.`largest_lead` AS `largest_lead`,
+    `tgs`.`points_off_turnovers` AS `points_off_turnovers`
+from (
+        (
+            (
+                (
+                    `team_game_stats` `tgs`
+                    join `games` `g` on (
+                        (
+                            `g`.`game_id` = `tgs`.`game_id`
+                        )
+                    )
+                )
+                join `seasons` `s` on (
+                    (
+                        `s`.`season_id` = `g`.`season_id`
+                    )
+                )
+            )
+            join `teams` `t` on (
+                (
+                    `t`.`team_id` = `tgs`.`team_id`
+                )
+            )
+        )
+        join `teams` `ot` on (
+            (
+                `ot`.`team_id` = `tgs`.`opponent_team_id`
+            )
+        )
+    )

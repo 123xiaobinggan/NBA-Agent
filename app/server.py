@@ -19,6 +19,7 @@ from agent.nba_agent import build_agent, load_dotenv_file
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FINAL_MARKER = "最终答案："
 FINAL_ANSWER_RE = re.compile(r"\*{0,2}\s*最终答案\s*[:：]\s*\*{0,2}\s*")
+FINAL_MARKER_WAIT_CHARS = 120
 
 
 @dataclass
@@ -92,8 +93,13 @@ def _message_text(message: Any) -> str:
     if isinstance(content, list):
         parts: list[str] = []
         for item in content:
-            if isinstance(item, dict) and item.get("type") == "text":
-                parts.append(str(item.get("text") or ""))
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                if item.get("type") == "text" or "text" in item:
+                    parts.append(str(item.get("text") or ""))
+            elif hasattr(item, "text"):
+                parts.append(str(getattr(item, "text") or ""))
         return "".join(parts)
     return ""
 
@@ -109,7 +115,7 @@ def _extract_final_answer(text: str) -> str:
     found, answer = _split_final_answer_marker(text)
     if found:
         return answer.strip()
-    return ""
+    return text.strip()
 
 
 def _strip_empty_sql_notice(text: str) -> str:
@@ -301,10 +307,14 @@ def _stream_agent_answer(chat: ChatSession, question: str) -> Generator[str, Non
                 marker_buffer += text
                 found_marker, text = _split_final_answer_marker(marker_buffer)
                 if not found_marker:
-                    marker_buffer = marker_buffer[-500:]
-                    continue
-                waiting_for_final = False
-                marker_buffer = ""
+                    if len(marker_buffer) < FINAL_MARKER_WAIT_CHARS:
+                        continue
+                    waiting_for_final = False
+                    text = marker_buffer
+                    marker_buffer = ""
+                else:
+                    waiting_for_final = False
+                    marker_buffer = ""
 
             if text:
                 answer_parts.append(text)
