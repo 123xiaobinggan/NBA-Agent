@@ -1,6 +1,7 @@
 .env
 .vscode
 __pycache__
+*.pyc
 outputs
 venv
 nba-agent-backup.tar
